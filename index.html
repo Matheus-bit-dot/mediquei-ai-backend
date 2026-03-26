@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mediquei AI</title>
+    <style>
+        :root { --primary: #00a896; --dark: #1d3557; --light: #f8f9fa; }
+        body { font-family: sans-serif; background: #eef2f3; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #chat-card { width: 400px; height: 550px; background: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        #header { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; }
+        #messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #fdfdfd; }
+        .msg { padding: 10px 14px; border-radius: 10px; max-width: 80%; font-size: 0.9rem; line-height: 1.4; }
+        .user { background: var(--primary); color: white; align-self: flex-end; }
+        .bot { background: #eee; color: #333; align-self: flex-start; }
+        #input-area { padding: 15px; display: flex; border-top: 1px solid #eee; }
+        input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 20px; outline: none; }
+        button { background: var(--primary); color: white; border: none; padding: 0 15px; margin-left: 5px; border-radius: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="chat-card">
+        <div id="header">Mediquei AI - Atendimento</div>
+        <div id="messages">
+            <div class="msg bot">Olá! Como posso ajudar você hoje?</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Digite sua dúvida..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const messages = document.getElementById('messages');
+            if (!input.value.trim()) return;
+
+            const userText = input.value;
+            messages.innerHTML += `<div class="msg user">${userText}</div>`;
+            input.value = '';
+            messages.scrollTop = messages.scrollHeight;
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/chat?texto=${encodeURIComponent(userText)}`);
+                const data = await response.json();
+                
+                let respostaFinal = data.resposta;
+                // Transforma o link do wa.me em um link clicável
+                if (respostaFinal.includes("https://wa.me/")) {
+                    respostaFinal = respostaFinal.replace(
+                        /(https:\/\/wa\.me\/[0-9]+)/g, 
+                        '<br><a href="$1" target="_blank" style="color: #00a896; font-weight: bold;">[CLIQUE AQUI PARA WHATSAPP]</a>'
+                    );
+                }
+
+                messages.innerHTML += `<div class="msg bot">${respostaFinal}</div>`;
+            } catch (error) {
+                messages.innerHTML += `<div class="msg bot">⚠️ Erro: O servidor não respondeu. Verifique o terminal!</div>`;
+            }
+            messages.scrollTop = messages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
