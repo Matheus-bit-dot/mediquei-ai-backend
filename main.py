@@ -6,7 +6,6 @@ from groq import Groq
 
 app = FastAPI()
 
-# Permite que o GitHub Pages acesse o backend no Render
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,12 +13,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configurações do Atendimento
+# Configurações do Consultor
 MEU_NOME = "Matheus Russi" 
 SISTEMA_CONTATO = "5516999930849" 
-LINK_WHATSAPP = f"https://wa.me/{SISTEMA_CONTATO}"
+# Link com mensagem automática para facilitar para o cliente
+LINK_WHATSAPP = f"https://wa.me/{SISTEMA_CONTATO}?text=Olá+Matheus,+estava+no+chat+da+Mediquei+e+gostaria+de+uma+consultoria."
 
-# Inicializa o cliente Groq buscando a chave no Render
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class ChatRequest(BaseModel):
@@ -27,42 +26,40 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    pergunta_usuario = request.texto
-    
-    # 1. Tenta ler o conhecimento local
     try:
         with open("conhecimento.txt", "r", encoding="utf-8") as f:
             contexto = f.read()[:4000]
     except FileNotFoundError:
-        contexto = "Mediquei: Especialista em planos de saúde, telemedicina e redução de carência."
+        contexto = "Mediquei: Especialista em planos de saúde e telemedicina 24h."
 
-    # 2. Prompt do Sistema (A "alma" da IA)
+    # PROMPT REVISADO: Removida saudação confusa e ajustado formato do link
     prompt_sistema = f"""
-    Você é o consultor digital da Mediquei.
-    Responda de forma humana, empática e breve (2 a 3 frases).
-    Use o CONHECIMENTO abaixo para explicar o que o cliente perguntou e mostre como a Mediquei ajuda.
-    Sempre finalize convidando o cliente para falar com o consultor {MEU_NOME}.
-    O link de fechamento obrigatório é: {LINK_WHATSAPP}
-
-    CONHECIMENTO:
-    {contexto}
+    Você é o assistente virtual da Mediquei, trabalhando diretamente para o consultor {MEU_NOME}.
+    
+    DIRETRIZES DE ESTILO:
+    - Nunca diga "ajudar você e o Matheus". Diga "ajudar você a encontrar o melhor plano com o suporte do especialista {MEU_NOME}".
+    - Respostas curtas (máximo 3 frases).
+    - Quando o usuário perguntar sobre doenças (como Anemia Falciforme), explique que a Mediquei busca redes com especialistas (hematologistas) e agiliza o processo.
+    - Sobre horários: Destaque que a telemedicina é 24 horas, 7 dias por semana.
+    
+    FORMATO DE LINK OBRIGATÓRIO:
+    Sempre que oferecer contato, use exatamente este formato Markdown:
+    [Falar com o consultor Matheus Russi]({LINK_WHATSAPP})
     """
 
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": prompt_sistema},
-                {"role": "user", "content": pergunta_usuario}
+                {"role": "system", "content": prompt_sistema + "\nCONHECIMENTO:\n" + contexto},
+                {"role": "user", "content": request.texto}
             ],
-            temperature=0.6,
-            max_tokens=300,
+            temperature=0.5,
         )
-        resposta = completion.choices[0].message.content
-        return {"resposta": resposta}
-    except Exception as e:
-        return {"resposta": f"Olá! Tive um pequeno soluço técnico. Fale direto com o {MEU_NOME} no WhatsApp para detalhes: {LINK_WHATSAPP}"}
+        return {"resposta": completion.choices[0].message.content}
+    except Exception:
+        return {"resposta": f"Para detalhes específicos, recomendo [clicar aqui para falar com Matheus Russi]({LINK_WHATSAPP})."}
 
 @app.get("/")
 async def root():
-    return {"status": "Mediquei IA (Llama 3.3) Online"}
+    return {"status": "Mediquei IA Ativa"}
