@@ -1,5 +1,4 @@
 fastapi
 uvicorn
 groq
-python-multipart
-sqlalchemy
+pydantic
