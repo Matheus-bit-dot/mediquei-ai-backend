@@ -1,10 +1,12 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from groq import Groq
 
 app = FastAPI()
 
-# Permite que o GitHub Pages converse com o Render
+# Permite que o GitHub Pages acesse o backend no Render
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -12,29 +14,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configurações do Atendimento
+MEU_NOME = "Matheus Russi" 
+SISTEMA_CONTATO = "5516999930849" 
+LINK_WHATSAPP = f"https://wa.me/{SISTEMA_CONTATO}"
+
+# Inicializa o cliente Groq buscando a chave no Render
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
 class ChatRequest(BaseModel):
     texto: str
 
-@app.get("/")
-async def root():
-    return {"mensagem": "Mediquei IA Online"}
-
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    msg = request.texto.lower()
+    pergunta_usuario = request.texto
     
-    # 1. RESPOSTAS SOBRE PLANOS E CARÊNCIA
-    if any(word in msg for word in ["plano", "carência", "carencia", "preço", "valor"]):
-        return {"resposta": "A Mediquei oferece planos Individuais, Familiares e Empresariais com ampla rede credenciada. A carência para consultas de rotina é zero em muitos casos! Gostaria que um consultor te enviasse a tabela de preços?"}
-    
-    # 2. RESPOSTAS SOBRE CONTATO/WHATSAPP (SEU NÚMERO AQUI)
-    elif any(word in msg for word in ["contato", "falar com alguém", "consultor", "whatsapp", "atendimento"]):
-        return {"resposta": "Você pode falar agora com nossa equipe humana! Clique no ícone do WhatsApp no canto da tela ou chame direto no número: (16) 99993-0849."}
+    # 1. Tenta ler o conhecimento local
+    try:
+        with open("conhecimento.txt", "r", encoding="utf-8") as f:
+            contexto = f.read()[:4000]
+    except FileNotFoundError:
+        contexto = "Mediquei: Especialista em planos de saúde, telemedicina e redução de carência."
 
-    # 3. RESPOSTAS SOBRE A EMPRESA
-    elif any(word in msg for word in ["vende", "o que é", "quem são"]):
-        return {"resposta": "Somos a Mediquei, uma plataforma focada em democratizar o acesso à saúde através de tecnologia e orientação médica ágil."}
+    # 2. Prompt do Sistema (A "alma" da IA)
+    prompt_sistema = f"""
+    Você é o consultor digital da Mediquei.
+    Responda de forma humana, empática e breve (2 a 3 frases).
+    Use o CONHECIMENTO abaixo para explicar o que o cliente perguntou e mostre como a Mediquei ajuda.
+    Sempre finalize convidando o cliente para falar com o consultor {MEU_NOME}.
+    O link de fechamento obrigatório é: {LINK_WHATSAPP}
 
-    # 4. RESPOSTA PARA DÚVIDAS GERAIS (SEU NÚMERO AQUI TAMBÉM)
-    else:
-        return {"resposta": f"Entendi que você tem dúvidas sobre '{request.texto}'. Como sou uma IA de triagem, o ideal é encaminhar seu caso para um de nossos especialistas. Clique no botão verde do WhatsApp ou nos chame no (16) 99993-0849!"}
+    CONHECIMENTO:
+    {contexto}
+    """
+
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": prompt_sistema},
+                {"role": "user", "content": pergunta_usuario}
+            ],
+            temperature=0.6,
+            max_tokens=300,
+        )
+        resposta = completion.choices[0].message.content
+        return {"resposta": resposta}
+    except Exception as e:
+        return {"resposta": f"Olá! Tive um pequeno soluço técnico. Fale direto com o {MEU_NOME} no WhatsApp para detalhes: {LINK_WHATSAPP}"}
+
+@app.get("/")
+async def root():
+    return {"status": "Mediquei IA (Llama 3.3) Online"}
